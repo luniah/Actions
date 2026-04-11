@@ -1,7 +1,11 @@
 {
     "openapi": "3.0.0",
     "info": {
-        "title": "My API",
+        "title": "Actions API",
+        "description": "API для рекомендаций действий на основе информации об окружающем мире пользователя",
+        "contact": {
+            "email": "https://github.com/luniah"
+        },
         "version": "1.0.0"
     },
     "servers": [
@@ -10,39 +14,294 @@
         }
     ],
     "paths": {
-        "/api/test": {
-            "get": {
+        "/api/v1/actions/recommend": {
+            "post": {
                 "tags": [
-                    "Test"
+                    "Actions"
                 ],
-                "summary": "Тестовый эндпоинт",
-                "description": "Возвращает приветственное сообщение",
-                "operationId": "7a09caa81b6dfd4c5087d06d7689eaa8",
+                "summary": "Получить рекомендацию действия",
+                "description": "Возвращает рекомендованное действие для пользователя на основе текущего контекста окружающего мира",
+                "operationId": "2962f4368d908e5345d7a5ddd3859851",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "userId"
+                                ],
+                                "properties": {
+                                    "userId": {
+                                        "description": "ID пользователя",
+                                        "type": "integer",
+                                        "example": 123
+                                    },
+                                    "latitude": {
+                                        "description": "Широта",
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 55.7558
+                                    },
+                                    "longitude": {
+                                        "description": "Долгота",
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 37.6176
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "200": {
-                        "description": "Успешный ответ",
+                        "description": "Успешный ответ с рекомендацией",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Hello World!"
+                                        "recommendation": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 123
+                                                },
+                                                "action_type": {
+                                                    "type": "string",
+                                                    "example": "watch_movie"
+                                                },
+                                                "action_id": {
+                                                    "type": "integer",
+                                                    "example": 3
+                                                },
+                                                "context": {
+                                                    "type": "object",
+                                                    "example": {
+                                                        "season": "WINTER",
+                                                        "day_time": "EVENING",
+                                                        "weather_condition": "SNOWY",
+                                                        "temperature": -5
+                                                    }
+                                                },
+                                                "suggestions": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "type": {
+                                                                "type": "string",
+                                                                "example": "movie"
+                                                            },
+                                                            "id": {
+                                                                "type": "integer",
+                                                                "example": 1
+                                                            },
+                                                            "title": {
+                                                                "type": "string",
+                                                                "example": "Один дома"
+                                                            },
+                                                            "reason": {
+                                                                "type": "string",
+                                                                "example": "Подходит под жанр: семейный"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2026-01-20T15:30:00Z"
+                                                }
+                                            },
+                                            "type": "object"
                                         }
                                     },
                                     "type": "object"
                                 }
                             }
                         }
+                    },
+                    "422": {
+                        "description": "Ошибка валидации"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
+            }
+        },
+        "/api/v1/actions": {
+            "get": {
+                "tags": [
+                    "Actions"
+                ],
+                "summary": "Получить список доступных действий",
+                "description": "Возвращает список всех доступных типов действий",
+                "operationId": "534ee546db2a55c4729942920919b6e9",
+                "responses": {
+                    "200": {
+                        "description": "Список доступных действий",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "actions": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "type": {
+                                                        "type": "string",
+                                                        "example": "walk"
+                                                    },
+                                                    "name": {
+                                                        "type": "string",
+                                                        "example": "Прогулка"
+                                                    },
+                                                    "description": {
+                                                        "type": "string",
+                                                        "example": "Прогулка на свежем воздухе"
+                                                    },
+                                                    "metadata": {
+                                                        "type": "object",
+                                                        "example": {
+                                                            "icon": "walk"
+                                                        }
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
+                    }
+                }
+            }
+        },
+        "/api/v1/actions/history": {
+            "get": {
+                "tags": [
+                    "Actions"
+                ],
+                "summary": "Получить историю рекомендаций",
+                "description": "Возвращает историю рекомендаций для пользователя",
+                "operationId": "45606bf378c76af83c1c428df037ea02",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 123
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        },
+                        "example": 10
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "История рекомендаций пользователя",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "history": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "user_id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "action_type": {
+                                                        "type": "string"
+                                                    },
+                                                    "suggestions": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "properties": {
+                                                                "type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "title": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Ошибка валидации"
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера"
                     }
                 }
             }
         }
     },
+    "components": {
+        "schemas": {
+            "GetActionsRequest": {
+                "description": "Запрос на получение истории действий",
+                "required": [
+                    "userId"
+                ]
+            },
+            "GetRecommendationRequest": {
+                "description": "Запрос на получение рекомендации действия",
+                "required": [
+                    "userId"
+                ]
+            }
+        }
+    },
     "tags": [
         {
-            "name": "Test",
-            "description": "Тестовые эндпоинты"
+            "name": "Actions",
+            "description": "Получение доступных действий и рекомендаций"
         }
     ]
 }

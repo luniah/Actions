@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Base;
 
-use App\Http\Controllers\OA;
+use OpenApi\Attributes as OA;
 
 #[OA\Info(
     version: "1.0.0",
-    title: "Actions API",
     description: "API для рекомендаций действий на основе информации об окружающем мире пользователя",
+    title: "Actions API",
     contact: new OA\Contact(
         email: "https://github.com/luniah"
     )
