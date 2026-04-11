@@ -20,6 +20,7 @@ class SongSeeder extends Seeder
                 'duration' => 156,
                 'tags' => json_encode(['christmas', 'happy', 'classic']),
                 'external_id' => 'lastfm_1',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -30,6 +31,7 @@ class SongSeeder extends Seeder
                 'duration' => 192,
                 'tags' => json_encode(['christmas', 'chill', 'classic']),
                 'external_id' => 'lastfm_2',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -40,6 +42,7 @@ class SongSeeder extends Seeder
                 'duration' => 200,
                 'tags' => json_encode(['pop', 'energetic', 'synthwave']),
                 'external_id' => 'lastfm_3',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -50,6 +53,7 @@ class SongSeeder extends Seeder
                 'duration' => 233,
                 'tags' => json_encode(['pop', 'happy', 'dance']),
                 'external_id' => 'lastfm_4',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -60,6 +64,7 @@ class SongSeeder extends Seeder
                 'duration' => 285,
                 'tags' => json_encode(['sad', 'ballad', 'soul']),
                 'external_id' => 'lastfm_5',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -70,6 +75,7 @@ class SongSeeder extends Seeder
                 'duration' => 233,
                 'tags' => json_encode(['happy', 'pop', 'funk']),
                 'external_id' => 'lastfm_6',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -80,6 +86,7 @@ class SongSeeder extends Seeder
                 'duration' => 354,
                 'tags' => json_encode(['rock', 'classic', 'epic']),
                 'external_id' => 'lastfm_7',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -90,6 +97,7 @@ class SongSeeder extends Seeder
                 'duration' => 294,
                 'tags' => json_encode(['pop', 'dance', 'classic']),
                 'external_id' => 'lastfm_8',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -100,6 +108,7 @@ class SongSeeder extends Seeder
                 'duration' => 301,
                 'tags' => json_encode(['rock', 'grunge', 'energetic']),
                 'external_id' => 'lastfm_9',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -110,11 +119,17 @@ class SongSeeder extends Seeder
                 'duration' => 228,
                 'tags' => json_encode(['soul', 'pop', 'powerful']),
                 'external_id' => 'lastfm_10',
+                'metadata' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
         ];
 
-        DB::table('actions_service.songs')->insert($songs);
+        foreach ($songs as $song) {
+            DB::table('actions_service.songs')->updateOrInsert(
+                ['external_id' => $song['external_id']],
+                $song
+            );
+        }
     }
 }

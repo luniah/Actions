@@ -12,6 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
+        DB::statement('CREATE SCHEMA IF NOT EXISTS actions_service');
+
         Schema::create('actions_service.recommendations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
@@ -19,7 +21,7 @@ return new class extends Migration
             $table->unsignedBigInteger('action_id')->nullable();
             $table->json('context')->nullable();
             $table->json('suggestions')->nullable();
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
             $table->index('user_id');
             $table->index('action_type');

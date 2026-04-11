@@ -12,6 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
+        DB::statement('CREATE SCHEMA IF NOT EXISTS actions_service');
+
         Schema::create('actions_service.songs', function (Blueprint $table) {
             $table->id();
             $table->string('name');

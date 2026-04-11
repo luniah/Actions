@@ -55,6 +55,11 @@ class ActionSeeder extends Seeder
             ],
         ];
 
-        DB::table('actions_service.actions')->insert($actions);
+        foreach ($actions as $action) {
+            DB::table('actions_service.actions')->updateOrInsert(
+                ['type' => $action['type']],
+                $action
+            );
+        }
     }
 }

@@ -145,6 +145,11 @@ class MovieSeeder extends Seeder
             ],
         ];
 
-        DB::table('actions_service.movies')->insert($movies);
+        foreach ($movies as $movie) {
+            DB::table('actions_service.movies')->updateOrInsert(
+                ['external_id' => $movie['external_id']],
+                $movie
+            );
+        }
     }
 }
