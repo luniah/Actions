@@ -24,7 +24,7 @@ class SongRepository
     }
 
     /**
-     * Найти песню по внешнему ID (из API)
+     * Найти песню по внешнему ID
      */
     public function findByExternalId(string $externalId): ?Song
     {
@@ -32,19 +32,25 @@ class SongRepository
     }
 
     /**
-     * Получить песни по тегу (жанр/настроение)
+     * Получить песни по настроению
      */
-    public function getByTag(string $tag): Collection
+    public function getByMood(string $mood): Collection
     {
-        return Song::byTag($tag)->get();
+        return Song::whereJsonContains('mood', $mood)->get();
     }
 
     /**
-     * Получить песни по нескольким тегам
+     * Получить песни по нескольким настроениям
      */
-    public function getByTags(array $tags): Collection
+    public function getByMoods(array $moods): Collection
     {
-        return Song::byTags($tags)->get();
+        $query = Song::query();
+
+        foreach ($moods as $mood) {
+            $query->whereJsonContains('mood', $mood);
+        }
+
+        return $query->get();
     }
 
     /**
@@ -52,7 +58,15 @@ class SongRepository
      */
     public function getByArtist(string $artist): Collection
     {
-        return Song::byArtist($artist)->get();
+        return Song::where('artist', 'ILIKE', '%' . $artist . '%')->get();
+    }
+
+    /**
+     * Получить песни по жанру (из mood)
+     */
+    public function getByGenre(string $genre): Collection
+    {
+        return Song::whereJsonContains('mood', $genre)->get();
     }
 
     /**
@@ -89,5 +103,38 @@ class SongRepository
         }
 
         return $song->delete();
+    }
+
+    /**
+     * Получить песни с пагинацией
+     */
+    public function paginate(int $perPage = 20): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    {
+        return Song::paginate($perPage);
+    }
+
+    /**
+     * Получить количество песен
+     */
+    public function count(): int
+    {
+        return Song::count();
+    }
+
+    /**
+     * Получить все уникальные настроения
+     */
+    public function getAllMoods(): array
+    {
+        $songs = Song::all();
+        $moods = [];
+
+        foreach ($songs as $song) {
+            if (!empty($song->mood)) {
+                $moods = array_merge($moods, $song->mood);
+            }
+        }
+
+        return array_unique($moods);
     }
 }
