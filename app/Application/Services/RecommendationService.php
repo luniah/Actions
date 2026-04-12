@@ -6,37 +6,40 @@ use App\Application\Models\WorldContextModel;
 use App\Application\Models\RecommendationModel;
 use App\Domain\Repositories\RecommendationRepository;
 use App\Domain\Repositories\ActionRepository;
-use App\Domain\Repositories\SongRepository;
-use App\Domain\Repositories\MovieRepository;
+use Illuminate\Support\Facades\Storage;
 
 class RecommendationService
 {
+    private array $musicData;
+    private array $moviesData;
+
     public function __construct(
         private readonly RecommendationRepository $recommendationRepository,
         private readonly ActionRepository $actionRepository,
-        private readonly SongRepository $songRepository,
-        private readonly MovieRepository $movieRepository,
         private readonly WorldContextAnalyzer $contextAnalyzer,
-    ) {}
+    ) {
+        $musicPath = storage_path('app/data/music.json');
+        $moviesPath = storage_path('app/data/movies.json');
+
+        $this->musicData = file_exists($musicPath)
+            ? json_decode(file_get_contents($musicPath), true)
+            : ['tracks' => []];
+
+        $this->moviesData = file_exists($moviesPath)
+            ? json_decode(file_get_contents($moviesPath), true)
+            : ['movies' => []];
+    }
 
     /**
      * Получить рекомендацию действия на основе контекста мира
      */
     public function recommend(WorldContextModel $context): RecommendationModel
     {
-        // Выбираем тип действия на основе анализа контекста
         $actionType = $this->chooseActionType($context);
-
-        // Получаем само действие
         $action = $this->actionRepository->getByType($actionType)->first();
-
-        // Получаем конкретные предложения
         $suggestions = $this->getSuggestionsForType($actionType, $context);
-
-        // Получаем полный анализ контекста для сохранения
         $contextAnalysis = $this->contextAnalyzer->getContextAnalysis($context);
 
-        // Сохраняем рекомендацию в БД
         $recommendation = $this->recommendationRepository->create([
             'user_id' => $context->userId,
             'action_type' => $actionType,
@@ -53,28 +56,20 @@ class RecommendationService
      */
     private function chooseActionType(WorldContextModel $context): string
     {
-        // Если подходит для домашнего отдыха - смотреть фильм
         if ($this->contextAnalyzer->isGoodForIndoorActivity($context)) {
-            // Если ночь - спать
             if ($context->dayTime === 'NIGHT') {
                 return 'sleep';
             }
-
-            // Если вечер - слушать музыку или смотреть фильм
             if ($context->dayTime === 'EVENING') {
-                // Чередуем для разнообразия (заглушка, позже будет LLM)
                 return rand(0, 1) === 0 ? 'watch_movie' : 'listen_music';
             }
-
             return 'watch_movie';
         }
 
-        // Если есть места поблизости - посетить
         if ($this->contextAnalyzer->hasNearbyPlaces($context)) {
             return 'visit_place';
         }
 
-        // По умолчанию - прогулка
         return 'walk';
     }
 
@@ -94,51 +89,185 @@ class RecommendationService
     }
 
     /**
-     * Получить предложения фильмов
-     */
-    private function getMovieSuggestions(WorldContextModel $context): array
-    {
-        $genre = $this->contextAnalyzer->getRecommendedMovieGenre($context);
-
-        $movies = $this->movieRepository->getByGenre($genre);
-
-        if ($movies->isEmpty()) {
-            $movies = $this->movieRepository->getAll()->take(3);
-        }
-
-        return $movies->map(function ($movie) use ($genre) {
-            return [
-                'type' => 'movie',
-                'id' => $movie->id,
-                'title' => $movie->title,
-                'genres' => $movie->genres,
-                'reason' => "Подходит под жанр: {$genre}",
-            ];
-        })->take(3)->values()->toArray();
-    }
-
-    /**
-     * Получить предложения музыки
+     * Получить предложения музыки из JSON-файла
      */
     private function getMusicSuggestions(WorldContextModel $context): array
     {
-        $mood = $this->contextAnalyzer->getRecommendedMusicMood($context);
+        $tracks = $this->musicData['tracks'] ?? [];
 
-        $songs = $this->songRepository->getByTag($mood);
-
-        if ($songs->isEmpty()) {
-            $songs = $this->songRepository->getAll()->take(3);
+        if (empty($tracks)) {
+            return $this->getStaticMusicFallback($context);
         }
 
-        return $songs->map(function ($song) use ($mood) {
+        $scoredTracks = array_map(function ($track) use ($context) {
+            $score = $this->calculateMusicScore($track, $context);
+            $track['score'] = $score;
+            $track['reason'] = $this->generateMusicReason($track, $context);
+            return $track;
+        }, $tracks);
+
+        usort($scoredTracks, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        $topTracks = array_slice($scoredTracks, 0, 3);
+
+        return array_map(function ($track) {
             return [
-                'type' => 'song',
-                'id' => $song->id,
-                'name' => $song->name,
-                'artist' => $song->artist,
-                'reason' => "Под настроение: {$mood}",
+                'type' => 'music',
+                'id' => $track['id'],
+                'name' => $track['name'],
+                'artist' => $track['artist'],
+                'album' => $track['album'],
+                'duration' => $track['duration'],
+                'genre' => $track['genre'],
+                'mood' => $track['mood'],
+                'reason' => $track['reason'],
             ];
-        })->take(3)->values()->toArray();
+        }, $topTracks);
+    }
+
+    /**
+     * Подсчёт очков релевантности трека
+     */
+    private function calculateMusicScore(array $track, WorldContextModel $context): int
+    {
+        $score = 0;
+        $mood = $track['mood'] ?? [];
+
+        if ($context->dayTime === 'MORNING' && (in_array('energetic', $mood) || in_array('happy', $mood))) $score += 5;
+        if ($context->dayTime === 'AFTERNOON' && in_array('energetic', $mood)) $score += 3;
+        if ($context->dayTime === 'EVENING' && (in_array('calm', $mood) || in_array('romantic', $mood))) $score += 5;
+        if ($context->dayTime === 'NIGHT' && in_array('calm', $mood)) $score += 5;
+
+        $condition = $context->weather['condition'] ?? '';
+        if ($condition === 'RAINY' && (in_array('calm', $mood) || in_array('melancholic', $mood))) $score += 4;
+        if ($condition === 'SNOWY' && in_array('cozy', $mood)) $score += 4;
+        if ($condition === 'CLEAR' && $context->dayTime === 'AFTERNOON' && in_array('happy', $mood)) $score += 3;
+
+        if ($context->season === 'WINTER' && (in_array('cozy', $mood) || in_array('nostalgic', $mood))) $score += 3;
+        if ($context->season === 'SUMMER' && (in_array('dance', $mood) || in_array('happy', $mood))) $score += 3;
+        if ($context->season === 'SPRING' && in_array('romantic', $mood)) $score += 2;
+        if ($context->season === 'AUTUMN' && in_array('melancholic', $mood)) $score += 2;
+
+        return $score;
+    }
+
+    /**
+     * Сгенерировать причину рекомендации
+     */
+    private function generateMusicReason(array $track, WorldContextModel $context): string
+    {
+        $mood = $track['mood'] ?? [];
+        $genre = $track['genre'] ?? '';
+
+        if ($context->dayTime === 'MORNING' && (in_array('energetic', $mood) || in_array('happy', $mood))) {
+            return 'Бодрый трек для отличного начала дня';
+        }
+        if ($context->dayTime === 'EVENING' && in_array('calm', $mood)) {
+            return 'Спокойная музыка для расслабленного вечера';
+        }
+        if ($context->dayTime === 'NIGHT' && in_array('calm', $mood)) {
+            return 'Умиротворяющая композиция для ночного отдыха';
+        }
+        if ($context->weather['condition'] === 'RAINY' && in_array('melancholic', $mood)) {
+            return 'Атмосферный трек для дождливого настроения';
+        }
+        if ($context->season === 'WINTER' && in_array('nostalgic', $mood)) {
+            return 'Уютная зимняя классика';
+        }
+        if ($context->season === 'SUMMER' && in_array('dance', $mood)) {
+            return 'Летний танцевальный хит';
+        }
+
+        return "Рекомендовано в жанре {$genre}";
+    }
+
+    /**
+     * Получить предложения фильмов из JSON-файла
+     */
+    private function getMovieSuggestions(WorldContextModel $context): array
+    {
+        $movies = $this->moviesData['movies'] ?? [];
+
+        if (empty($movies)) {
+            return $this->getStaticMovieFallback($context);
+        }
+
+        $scoredMovies = array_map(function ($movie) use ($context) {
+            $score = $this->calculateMovieScore($movie, $context);
+            $movie['score'] = $score;
+            $movie['reason'] = $this->generateMovieReason($movie, $context);
+            return $movie;
+        }, $movies);
+
+        usort($scoredMovies, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        $topMovies = array_slice($scoredMovies, 0, 3);
+
+        return array_map(function ($movie) {
+            return [
+                'type' => 'movie',
+                'id' => $movie['id'],
+                'title' => $movie['title'],
+                'description' => $movie['description'],
+                'genres' => $movie['genres'],
+                'director' => $movie['director'],
+                'year' => $movie['year'],
+                'duration' => $movie['duration'],
+                'rating' => $movie['rating'],
+                'reason' => $movie['reason'],
+            ];
+        }, $topMovies);
+    }
+
+    /**
+     * Подсчёт очков релевантности фильма
+     */
+    private function calculateMovieScore(array $movie, WorldContextModel $context): int
+    {
+        $score = 0;
+        $mood = $movie['mood'] ?? [];
+        $genres = $movie['genres'] ?? [];
+
+        $condition = $context->weather['condition'] ?? '';
+        if ($condition === 'RAINY' && (in_array('cozy', $mood) || in_array('atmospheric', $mood))) $score += 5;
+        if ($condition === 'SNOWY' && (in_array('новогодний', $genres) || in_array('cozy', $mood))) $score += 5;
+
+        if ($context->dayTime === 'EVENING' && (in_array('epic', $mood) || in_array('emotional', $mood))) $score += 4;
+        if ($context->dayTime === 'NIGHT' && in_array('dark', $mood)) $score += 4;
+        if ($context->dayTime === 'AFTERNOON' && in_array('funny', $mood)) $score += 3;
+
+        if ($context->season === 'WINTER' && in_array('новогодний', $genres)) $score += 5;
+        if ($context->season === 'SUMMER' && in_array('приключения', $genres)) $score += 3;
+        if ($context->season === 'AUTUMN' && in_array('atmospheric', $mood)) $score += 3;
+
+        $score += ($movie['rating'] ?? 7) * 1;
+
+        return (int) $score;
+    }
+
+    /**
+     * Сгенерировать причину рекомендации фильма
+     */
+    private function generateMovieReason(array $movie, WorldContextModel $context): string
+    {
+        $mood = $movie['mood'] ?? [];
+        $genres = $movie['genres'] ?? [];
+
+        if ($context->weather['condition'] === 'RAINY' && in_array('cozy', $mood)) {
+            return 'Уютный фильм для дождливого вечера';
+        }
+        if ($context->season === 'WINTER' && in_array('новогодний', $genres)) {
+            return 'Новогоднее настроение для зимнего вечера';
+        }
+        if ($context->dayTime === 'EVENING' && in_array('epic', $mood)) {
+            return 'Эпическое кино для вечернего просмотра';
+        }
+        if ($context->dayTime === 'NIGHT' && in_array('dark', $mood)) {
+            return 'Атмосферный фильм для ночного просмотра';
+        }
+
+        $genre = $genres[0] ?? 'драма';
+        return "Рекомендовано в жанре {$genre}";
     }
 
     /**
@@ -158,6 +287,8 @@ class RecommendationService
                 'id' => $place['id'],
                 'name' => $place['name'],
                 'category' => $place['category'],
+                'address' => $place['address'] ?? null,
+                'rating' => $place['rating'] ?? null,
                 'reason' => 'Находится рядом с вами',
             ];
         }, $places);
@@ -170,33 +301,17 @@ class RecommendationService
     {
         $suggestions = [];
 
-        // Рекомендация по одежде
         $clothing = $this->contextAnalyzer->getClothingRecommendation($context);
-        $suggestions[] = [
-            'type' => 'tip',
-            'message' => $clothing,
-        ];
+        $suggestions[] = ['type' => 'tip', 'message' => $clothing];
 
-        // Дополнительные советы
         if ($this->contextAnalyzer->isCold($context)) {
-            $suggestions[] = [
-                'type' => 'tip',
-                'message' => 'Не забудьте взять горячий напиток с собой',
-            ];
+            $suggestions[] = ['type' => 'tip', 'message' => 'Не забудьте взять горячий напиток с собой'];
         }
-
         if ($this->contextAnalyzer->isHot($context)) {
-            $suggestions[] = [
-                'type' => 'tip',
-                'message' => 'Возьмите с собой воду',
-            ];
+            $suggestions[] = ['type' => 'tip', 'message' => 'Возьмите с собой воду'];
         }
-
         if ($this->contextAnalyzer->isRainy($context)) {
-            $suggestions[] = [
-                'type' => 'tip',
-                'message' => 'Не забудьте зонт',
-            ];
+            $suggestions[] = ['type' => 'tip', 'message' => 'Не забудьте зонт'];
         }
 
         return $suggestions;
@@ -208,27 +323,41 @@ class RecommendationService
     private function getSleepSuggestions(WorldContextModel $context): array
     {
         $suggestions = [
-            [
-                'type' => 'tip',
-                'message' => 'Проветрите комнату перед сном',
-            ]
+            ['type' => 'tip', 'message' => 'Проветрите комнату перед сном'],
         ];
 
         if ($this->contextAnalyzer->isHot($context)) {
-            $suggestions[] = [
-                'type' => 'tip',
-                'message' => 'Включите кондиционер или вентилятор для комфортного сна',
-            ];
+            $suggestions[] = ['type' => 'tip', 'message' => 'Включите кондиционер или вентилятор для комфортного сна'];
+        }
+        if ($this->contextAnalyzer->isCold($context)) {
+            $suggestions[] = ['type' => 'tip', 'message' => 'Укройтесь тёплым одеялом'];
         }
 
-        if ($this->contextAnalyzer->isCold($context)) {
-            $suggestions[] = [
-                'type' => 'tip',
-                'message' => 'Укройтесь тёплым одеялом',
-            ];
-        }
+        $suggestions[] = ['type' => 'tip', 'message' => 'Постарайтесь лечь спать до полуночи для лучшего отдыха'];
 
         return $suggestions;
+    }
+
+    /**
+     * Статические треки на случай отсутствия данных
+     */
+    private function getStaticMusicFallback(WorldContextModel $context): array
+    {
+        return [
+            ['type' => 'music', 'id' => 'fallback_1', 'name' => 'Новогодняя', 'artist' => 'Дискотека Авария', 'reason' => 'Зимнее настроение'],
+            ['type' => 'music', 'id' => 'fallback_2', 'name' => 'Снег', 'artist' => 'Филипп Киркоров', 'reason' => 'Зимняя классика'],
+        ];
+    }
+
+    /**
+     * Статические фильмы на случай отсутствия данных
+     */
+    private function getStaticMovieFallback(WorldContextModel $context): array
+    {
+        return [
+            ['type' => 'movie', 'id' => 'fallback_1', 'title' => 'Один дома', 'reason' => 'Новогодняя классика'],
+            ['type' => 'movie', 'id' => 'fallback_2', 'title' => 'Ирония судьбы', 'reason' => 'Традиционный новогодний фильм'],
+        ];
     }
 
     /**

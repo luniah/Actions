@@ -13,6 +13,9 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * Регистрация сервисов
+     */
     public function register(): void
     {
         $this->registerRepositories();
@@ -36,22 +39,20 @@ class AppServiceProvider extends ServiceProvider
     private function registerServices(): void
     {
         $this->app->singleton(WorldContextAnalyzer::class);
-
-        $this->app->singleton(WorldServiceClient::class, function ($app) {
-            return new WorldServiceClient();
-        });
+        $this->app->singleton(WorldServiceClient::class);
 
         $this->app->singleton(RecommendationService::class, function ($app) {
             return new RecommendationService(
                 $app->make(RecommendationRepository::class),
                 $app->make(ActionRepository::class),
-                $app->make(SongRepository::class),
-                $app->make(MovieRepository::class),
                 $app->make(WorldContextAnalyzer::class)
             );
         });
     }
 
+    /**
+     * Загрузка сервисов
+     */
     public function boot(): void
     {
         //

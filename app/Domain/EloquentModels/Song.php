@@ -16,32 +16,32 @@ class Song extends Model
         'artist',
         'album',
         'duration',
-        'tags',
+        'mood',
         'external_id',
         'metadata',
     ];
 
     protected $casts = [
-        'tags' => 'array',
+        'mood' => 'array',
         'metadata' => 'array',
         'duration' => 'integer',
     ];
 
     /**
-     * Скоуп для фильтрации по тегам (жанр/настроение)
+     * Скоуп для фильтрации по настроению
      */
-    public function scopeByTag($query, string $tag)
+    public function scopeByMood($query, string $mood)
     {
-        return $query->whereJsonContains('tags', $tag);
+        return $query->whereJsonContains('mood', $mood);
     }
 
     /**
-     * Скоуп для фильтрации по нескольким тегам
+     * Скоуп для фильтрации по нескольким настроениям
      */
-    public function scopeByTags($query, array $tags)
+    public function scopeByMoods($query, array $moods)
     {
-        foreach ($tags as $tag) {
-            $query->whereJsonContains('tags', $tag);
+        foreach ($moods as $mood) {
+            $query->whereJsonContains('mood', $mood);
         }
         return $query;
     }
@@ -51,6 +51,14 @@ class Song extends Model
      */
     public function scopeByArtist($query, string $artist)
     {
-        return $query->where('artist', $artist);
+        return $query->where('artist', 'ILIKE', '%' . $artist . '%');
+    }
+
+    /**
+     * Скоуп для фильтрации по внешнему источнику
+     */
+    public function scopeBySource($query, string $source)
+    {
+        return $query->where('metadata->source', $source);
     }
 }

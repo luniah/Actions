@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('artist');
             $table->string('album')->nullable();
             $table->integer('duration')->nullable();
-            $table->json('tags')->nullable();
+            $table->json('mood')->nullable();
             $table->string('external_id')->nullable()->unique();
             $table->json('metadata')->nullable();
             $table->timestamps();
