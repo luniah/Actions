@@ -10,6 +10,7 @@ use App\Domain\Repositories\RecommendationRepository;
 use App\Domain\EloquentModels\Action;
 use App\Domain\EloquentModels\Recommendation;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Tests\TestCase;
 
@@ -24,16 +25,12 @@ class RecommendationServiceTest extends TestCase
     {
         parent::setUp();
 
-        // Создаём JSON-файлы для тестов
-        $musicPath = storage_path('app/data/music.json');
-        $moviesPath = storage_path('app/data/movies.json');
+        // Используем фейковую файловую систему вместо реальной
+        Storage::fake('local');
 
-        if (!is_dir(dirname($musicPath))) {
-            mkdir(dirname($musicPath), 0755, true);
-        }
-
-        file_put_contents($musicPath, json_encode(['tracks' => []]));
-        file_put_contents($moviesPath, json_encode(['movies' => []]));
+        // Создаём пустые JSON-файлы в фейковом хранилище
+        Storage::put('data/music.json', json_encode(['tracks' => []]));
+        Storage::put('data/movies.json', json_encode(['movies' => []]));
 
         $this->recommendationRepositoryMock = Mockery::mock(RecommendationRepository::class);
         $this->actionRepositoryMock = Mockery::mock(ActionRepository::class);
