@@ -4,6 +4,7 @@ namespace App\Domain\EloquentModels;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Database\Factories\SongFactory;
 
 class Song extends Model
 {
@@ -60,5 +61,13 @@ class Song extends Model
     public function scopeBySource($query, string $source)
     {
         return $query->where('metadata->source', $source);
+    }
+
+    /**
+     * Создать новый экземпляр фабрики для модели
+     */
+    protected static function newFactory()
+    {
+        return SongFactory::new();
     }
 }

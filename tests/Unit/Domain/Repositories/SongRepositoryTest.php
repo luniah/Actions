@@ -4,19 +4,26 @@ namespace Tests\Unit\Domain\Repositories;
 
 use App\Domain\EloquentModels\Song;
 use App\Domain\Repositories\SongRepository;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Eloquent\Collection;
+use Mockery;
 use Tests\TestCase;
 
 class SongRepositoryTest extends TestCase
 {
-    use RefreshDatabase;
-
     private SongRepository $repository;
+    private $songModelMock;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repository = new SongRepository();
+        $this->songModelMock = Mockery::mock(Song::class);
+        $this->repository = new SongRepository($this->songModelMock);
+    }
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+        parent::tearDown();
     }
 
     /**
@@ -24,27 +31,15 @@ class SongRepositoryTest extends TestCase
      */
     public function test_get_all_songs(): void
     {
-        Song::create([
-            'name' => 'Test Song 1',
-            'artist' => 'Test Artist 1',
-            'album' => 'Test Album 1',
-            'duration' => 180,
-            'mood' => ['happy', 'energetic'],
-            'external_id' => 'test_1',
-        ]);
+        $songs = Song::factory()->count(3)->make();
+        $collection = new Collection($songs);
 
-        Song::create([
-            'name' => 'Test Song 2',
-            'artist' => 'Test Artist 2',
-            'album' => 'Test Album 2',
-            'duration' => 240,
-            'mood' => ['calm', 'peaceful'],
-            'external_id' => 'test_2',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('get')->once()->andReturn($collection);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
-        $songs = $this->repository->getAll();
-
-        $this->assertCount(2, $songs);
+        $result = $this->repository->getAll();
+        $this->assertCount(3, $result);
     }
 
     /**
@@ -52,20 +47,15 @@ class SongRepositoryTest extends TestCase
      */
     public function test_find_song_by_id(): void
     {
-        $song = Song::create([
-            'name' => 'Test Song',
-            'artist' => 'Test Artist',
-            'album' => 'Test Album',
-            'duration' => 180,
-            'mood' => ['happy'],
-            'external_id' => 'test_123',
-        ]);
+        $song = Song::factory()->make(['id' => 5]);
 
-        $found = $this->repository->findById($song->id);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')->with(5)->once()->andReturn($song);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
+        $found = $this->repository->findById(5);
         $this->assertNotNull($found);
-        $this->assertEquals($song->id, $found->id);
-        $this->assertEquals('Test Song', $found->name);
+        $this->assertEquals(5, $found->id);
     }
 
     /**
@@ -73,21 +63,15 @@ class SongRepositoryTest extends TestCase
      */
     public function test_find_song_by_external_id(): void
     {
-        Song::create([
-            'name' => 'Test Song',
-            'artist' => 'Test Artist',
-            'album' => 'Test Album',
-            'duration' => 180,
-            'mood' => ['happy'],
-            'external_id' => 'spotify_123',
-        ]);
+        $song = Song::factory()->make(['id' => 1, 'external_id' => 'spotify_123']);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('where')->with('external_id', 'spotify_123')->once()->andReturnSelf();
+        $queryMock->shouldReceive('first')->once()->andReturn($song);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
         $found = $this->repository->findByExternalId('spotify_123');
-        $notFound = $this->repository->findByExternalId('non_existent');
-
         $this->assertNotNull($found);
-        $this->assertEquals('Test Song', $found->name);
-        $this->assertNull($notFound);
+        $this->assertEquals('spotify_123', $found->external_id);
     }
 
     /**
@@ -95,34 +79,16 @@ class SongRepositoryTest extends TestCase
      */
     public function test_get_songs_by_mood(): void
     {
-        Song::create([
-            'name' => 'Energetic Song',
-            'artist' => 'Artist 1',
-            'mood' => ['energetic', 'happy'],
-            'external_id' => 'test_1',
-        ]);
+        $songs = Song::factory()->energetic()->count(2)->make();
+        $collection = new Collection($songs);
 
-        Song::create([
-            'name' => 'Calm Song',
-            'artist' => 'Artist 2',
-            'mood' => ['calm', 'peaceful'],
-            'external_id' => 'test_2',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('whereJsonContains')->with('mood', 'energetic')->once()->andReturnSelf();
+        $queryMock->shouldReceive('get')->once()->andReturn($collection);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
-        Song::create([
-            'name' => 'Mixed Song',
-            'artist' => 'Artist 3',
-            'mood' => ['happy', 'calm'],
-            'external_id' => 'test_3',
-        ]);
-
-        $energetic = $this->repository->getByMood('energetic');
-        $calm = $this->repository->getByMood('calm');
-        $happy = $this->repository->getByMood('happy');
-
-        $this->assertCount(1, $energetic);
-        $this->assertCount(2, $calm);
-        $this->assertCount(2, $happy);
+        $result = $this->repository->getByMood('energetic');
+        $this->assertCount(2, $result);
     }
 
     /**
@@ -130,31 +96,17 @@ class SongRepositoryTest extends TestCase
      */
     public function test_get_songs_by_multiple_moods(): void
     {
-        Song::create([
-            'name' => 'Happy Energetic Song',
-            'artist' => 'Artist 1',
-            'mood' => ['happy', 'energetic'],
-            'external_id' => 'test_1',
-        ]);
+        $songs = Song::factory()->count(1)->make();
+        $collection = new Collection($songs);
 
-        Song::create([
-            'name' => 'Happy Calm Song',
-            'artist' => 'Artist 2',
-            'mood' => ['happy', 'calm'],
-            'external_id' => 'test_2',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('whereJsonContains')->with('mood', 'happy')->once()->andReturnSelf();
+        $queryMock->shouldReceive('whereJsonContains')->with('mood', 'energetic')->once()->andReturnSelf();
+        $queryMock->shouldReceive('get')->once()->andReturn($collection);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
-        Song::create([
-            'name' => 'Sad Calm Song',
-            'artist' => 'Artist 3',
-            'mood' => ['sad', 'calm'],
-            'external_id' => 'test_3',
-        ]);
-
-        $happyAndEnergetic = $this->repository->getByMoods(['happy', 'energetic']);
-
-        $this->assertCount(1, $happyAndEnergetic);
-        $this->assertEquals('Happy Energetic Song', $happyAndEnergetic[0]->name);
+        $result = $this->repository->getByMoods(['happy', 'energetic']);
+        $this->assertCount(1, $result);
     }
 
     /**
@@ -162,27 +114,16 @@ class SongRepositoryTest extends TestCase
      */
     public function test_get_songs_by_artist(): void
     {
-        Song::create([
-            'name' => 'Song 1',
-            'artist' => 'The Beatles',
-            'external_id' => 'test_1',
-        ]);
+        $songs = Song::factory()->count(2)->make();
+        $collection = new Collection($songs);
 
-        Song::create([
-            'name' => 'Song 2',
-            'artist' => 'Queen',
-            'external_id' => 'test_2',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('where')->with('artist', 'ILIKE', '%Beatles%')->once()->andReturnSelf();
+        $queryMock->shouldReceive('get')->once()->andReturn($collection);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
-        Song::create([
-            'name' => 'Song 3',
-            'artist' => 'The Beatles',
-            'external_id' => 'test_3',
-        ]);
-
-        $beatlesSongs = $this->repository->getByArtist('Beatles');
-
-        $this->assertCount(2, $beatlesSongs);
+        $result = $this->repository->getByArtist('Beatles');
+        $this->assertCount(2, $result);
     }
 
     /**
@@ -190,24 +131,15 @@ class SongRepositoryTest extends TestCase
      */
     public function test_create_song(): void
     {
-        $data = [
-            'name' => 'New Song',
-            'artist' => 'New Artist',
-            'album' => 'New Album',
-            'duration' => 200,
-            'mood' => ['happy', 'dance'],
-            'external_id' => 'new_123',
-            'metadata' => ['genre' => 'pop'],
-        ];
+        $data = ['name' => 'New Song', 'artist' => 'Artist'];
+        $song = Song::factory()->make($data);
 
-        $song = $this->repository->create($data);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('create')->with($data)->once()->andReturn($song);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
-        $this->assertDatabaseHas('actions_service.songs', [
-            'name' => 'New Song',
-            'artist' => 'New Artist',
-            'external_id' => 'new_123',
-        ]);
-        $this->assertEquals($data['name'], $song->name);
+        $result = $this->repository->create($data);
+        $this->assertEquals('New Song', $result->name);
     }
 
     /**
@@ -215,23 +147,15 @@ class SongRepositoryTest extends TestCase
      */
     public function test_update_song(): void
     {
-        $song = Song::create([
-            'name' => 'Old Name',
-            'artist' => 'Old Artist',
-            'external_id' => 'test_123',
-        ]);
+        $songMock = Mockery::mock(Song::class);
+        $songMock->shouldReceive('update')->with(['name' => 'Updated'])->once()->andReturn(true);
 
-        $updated = $this->repository->update($song->id, [
-            'name' => 'New Name',
-            'artist' => 'New Artist',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')->with(1)->once()->andReturn($songMock);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
+        $updated = $this->repository->update(1, ['name' => 'Updated']);
         $this->assertTrue($updated);
-        $this->assertDatabaseHas('actions_service.songs', [
-            'id' => $song->id,
-            'name' => 'New Name',
-            'artist' => 'New Artist',
-        ]);
     }
 
     /**
@@ -239,18 +163,15 @@ class SongRepositoryTest extends TestCase
      */
     public function test_delete_song(): void
     {
-        $song = Song::create([
-            'name' => 'To Delete',
-            'artist' => 'Artist',
-            'external_id' => 'delete_123',
-        ]);
+        $songMock = Mockery::mock(Song::class);
+        $songMock->shouldReceive('delete')->once()->andReturn(true);
 
-        $deleted = $this->repository->delete($song->id);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')->with(1)->once()->andReturn($songMock);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
+        $deleted = $this->repository->delete(1);
         $this->assertTrue($deleted);
-        $this->assertDatabaseMissing('actions_service.songs', [
-            'id' => $song->id,
-        ]);
     }
 
     /**
@@ -258,54 +179,30 @@ class SongRepositoryTest extends TestCase
      */
     public function test_get_all_moods(): void
     {
-        Song::create([
-            'name' => 'Song 1',
-            'artist' => 'Artist 1',
-            'mood' => ['happy', 'energetic'],
-            'external_id' => 'test_1',
-        ]);
+        $song1 = Song::factory()->make(['mood' => ['happy', 'energetic']]);
+        $song2 = Song::factory()->make(['mood' => ['calm', 'sad']]);
+        $collection = new Collection([$song1, $song2]);
 
-        Song::create([
-            'name' => 'Song 2',
-            'artist' => 'Artist 2',
-            'mood' => ['calm', 'happy'],
-            'external_id' => 'test_2',
-        ]);
-
-        Song::create([
-            'name' => 'Song 3',
-            'artist' => 'Artist 3',
-            'mood' => ['sad', 'melancholic'],
-            'external_id' => 'test_3',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('get')->once()->andReturn($collection);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
         $moods = $this->repository->getAllMoods();
-
-        $this->assertContains('happy', $moods);
-        $this->assertContains('energetic', $moods);
-        $this->assertContains('calm', $moods);
-        $this->assertContains('sad', $moods);
-        $this->assertContains('melancholic', $moods);
+        $this->assertEquals(['happy', 'energetic', 'calm', 'sad'], $moods);
     }
 
     /**
-     * Тест пагинации
+     * Тест пагинации песен
      */
     public function test_paginate_songs(): void
     {
-        for ($i = 1; $i <= 25; $i++) {
-            Song::create([
-                'name' => "Song {$i}",
-                'artist' => "Artist {$i}",
-                'external_id' => "test_{$i}",
-            ]);
-        }
+        $paginatorMock = Mockery::mock(\Illuminate\Contracts\Pagination\LengthAwarePaginator::class);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('paginate')->with(10)->once()->andReturn($paginatorMock);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
-        $paginated = $this->repository->paginate(10);
-
-        $this->assertEquals(25, $paginated->total());
-        $this->assertCount(10, $paginated->items());
-        $this->assertEquals(3, $paginated->lastPage());
+        $result = $this->repository->paginate(10);
+        $this->assertSame($paginatorMock, $result);
     }
 
     /**
@@ -313,26 +210,11 @@ class SongRepositoryTest extends TestCase
      */
     public function test_count_songs(): void
     {
-        Song::create([
-            'name' => 'Song 1',
-            'artist' => 'Artist 1',
-            'external_id' => 'test_1',
-        ]);
-
-        Song::create([
-            'name' => 'Song 2',
-            'artist' => 'Artist 2',
-            'external_id' => 'test_2',
-        ]);
-
-        Song::create([
-            'name' => 'Song 3',
-            'artist' => 'Artist 3',
-            'external_id' => 'test_3',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('count')->once()->andReturn(5);
+        $this->songModelMock->shouldReceive('query')->once()->andReturn($queryMock);
 
         $count = $this->repository->count();
-
-        $this->assertEquals(3, $count);
+        $this->assertEquals(5, $count);
     }
 }

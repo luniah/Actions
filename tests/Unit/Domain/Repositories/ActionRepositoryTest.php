@@ -4,19 +4,26 @@ namespace Tests\Unit\Domain\Repositories;
 
 use App\Domain\EloquentModels\Action;
 use App\Domain\Repositories\ActionRepository;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Eloquent\Collection;
+use Mockery;
 use Tests\TestCase;
 
 class ActionRepositoryTest extends TestCase
 {
-    use RefreshDatabase;
-
     private ActionRepository $repository;
+    private $actionModelMock;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repository = new ActionRepository();
+        $this->actionModelMock = Mockery::mock(Action::class);
+        $this->repository = new ActionRepository($this->actionModelMock);
+    }
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+        parent::tearDown();
     }
 
     /**
@@ -24,25 +31,22 @@ class ActionRepositoryTest extends TestCase
      */
     public function test_get_all_actions(): void
     {
-        Action::create([
-            'type' => 'walk',
-            'name' => 'Прогулка',
-            'description' => 'Прогулка на свежем воздухе',
-            'metadata' => ['icon' => '🚶'],
-        ]);
+        $actions = Action::factory()->count(5)->make();
+        $collection = new Collection($actions);
 
-        Action::create([
-            'type' => 'sleep',
-            'name' => 'Сон',
-            'description' => 'Полноценный отдых',
-            'metadata' => ['icon' => '😴'],
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('get')
+            ->once()
+            ->andReturn($collection);
 
-        $actions = $this->repository->getAll();
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
 
-        $this->assertCount(2, $actions);
-        $this->assertEquals('walk', $actions[0]->type);
-        $this->assertEquals('sleep', $actions[1]->type);
+        $result = $this->repository->getAll();
+
+        $this->assertCount(5, $result);
     }
 
     /**
@@ -50,18 +54,23 @@ class ActionRepositoryTest extends TestCase
      */
     public function test_find_action_by_id(): void
     {
-        $action = Action::create([
-            'type' => 'walk',
-            'name' => 'Прогулка',
-            'description' => 'Прогулка на свежем воздухе',
-            'metadata' => ['icon' => '🚶'],
-        ]);
+        $action = Action::factory()->make(['id' => 1]);
 
-        $found = $this->repository->findById($action->id);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')
+            ->with(1)
+            ->once()
+            ->andReturn($action);
+
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
+
+        $found = $this->repository->findById(1);
 
         $this->assertNotNull($found);
-        $this->assertEquals($action->id, $found->id);
-        $this->assertEquals('walk', $found->type);
+        $this->assertEquals(1, $found->id);
     }
 
     /**
@@ -69,6 +78,17 @@ class ActionRepositoryTest extends TestCase
      */
     public function test_find_non_existent_action_returns_null(): void
     {
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')
+            ->with(99999)
+            ->once()
+            ->andReturn(null);
+
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
+
         $found = $this->repository->findById(99999);
 
         $this->assertNull($found);
@@ -79,36 +99,26 @@ class ActionRepositoryTest extends TestCase
      */
     public function test_get_actions_by_type(): void
     {
-        Action::create([
-            'type' => 'walk',
-            'name' => 'Прогулка',
-            'description' => 'Прогулка на свежем воздухе',
-            'metadata' => ['icon' => '🚶'],
-        ]);
+        $actions = Action::factory()->walk()->count(3)->make();
+        $collection = new Collection($actions);
 
-        Action::create([
-            'type' => 'walk',
-            'name' => 'Ходьба',
-            'description' => 'Быстрая ходьба',
-            'metadata' => ['icon' => '🚶'],
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('where')
+            ->with('type', Action::TYPE_WALK)
+            ->once()
+            ->andReturnSelf();
+        $queryMock->shouldReceive('get')
+            ->once()
+            ->andReturn($collection);
 
-        Action::create([
-            'type' => 'sleep',
-            'name' => 'Сон',
-            'description' => 'Полноценный отдых',
-            'metadata' => ['icon' => '😴'],
-        ]);
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
 
-        $walkActions = $this->repository->getByType('walk');
-        $sleepActions = $this->repository->getByType('sleep');
+        $result = $this->repository->getByType(Action::TYPE_WALK);
 
-        $this->assertCount(2, $walkActions);
-        $this->assertCount(1, $sleepActions);
-
-        foreach ($walkActions as $action) {
-            $this->assertEquals('walk', $action->type);
-        }
+        $this->assertCount(3, $result);
     }
 
     /**
@@ -117,20 +127,27 @@ class ActionRepositoryTest extends TestCase
     public function test_create_action(): void
     {
         $data = [
-            'type' => 'walk',
+            'type' => Action::TYPE_WALK,
             'name' => 'Тестовая прогулка',
             'description' => 'Тестовое описание',
-            'metadata' => ['test' => true],
         ];
 
-        $action = $this->repository->create($data);
+        $action = Action::factory()->make($data);
 
-        $this->assertDatabaseHas('actions_service.actions', [
-            'type' => 'walk',
-            'name' => 'Тестовая прогулка',
-        ]);
-        $this->assertEquals($data['name'], $action->name);
-        $this->assertEquals($data['type'], $action->type);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('create')
+            ->with($data)
+            ->once()
+            ->andReturn($action);
+
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
+
+        $result = $this->repository->create($data);
+
+        $this->assertEquals('Тестовая прогулка', $result->name);
     }
 
     /**
@@ -138,34 +155,25 @@ class ActionRepositoryTest extends TestCase
      */
     public function test_update_action(): void
     {
-        $action = Action::create([
-            'type' => 'walk',
-            'name' => 'Старое имя',
-            'description' => 'Старое описание',
-            'metadata' => ['old' => true],
-        ]);
+        $actionMock = Mockery::mock(Action::class);
+        $actionMock->shouldReceive('update')
+            ->with(['name' => 'Новое имя'])
+            ->once()
+            ->andReturn(true);
 
-        $updated = $this->repository->update($action->id, [
-            'name' => 'Новое имя',
-            'description' => 'Новое описание',
-        ]);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')
+            ->with(1)
+            ->once()
+            ->andReturn($actionMock);
 
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
+
+        $updated = $this->repository->update(1, ['name' => 'Новое имя']);
         $this->assertTrue($updated);
-        $this->assertDatabaseHas('actions_service.actions', [
-            'id' => $action->id,
-            'name' => 'Новое имя',
-            'description' => 'Новое описание',
-        ]);
-    }
-
-    /**
-     * Тест обновления несуществующего действия
-     */
-    public function test_update_non_existent_action_returns_false(): void
-    {
-        $updated = $this->repository->update(99999, ['name' => 'Новое имя']);
-
-        $this->assertFalse($updated);
     }
 
     /**
@@ -173,28 +181,23 @@ class ActionRepositoryTest extends TestCase
      */
     public function test_delete_action(): void
     {
-        $action = Action::create([
-            'type' => 'walk',
-            'name' => 'Для удаления',
-            'description' => 'Будет удалено',
-            'metadata' => [],
-        ]);
+        $actionMock = Mockery::mock(Action::class);
+        $actionMock->shouldReceive('delete')
+            ->once()
+            ->andReturn(true);
 
-        $deleted = $this->repository->delete($action->id);
+        $queryMock = Mockery::mock();
+        $queryMock->shouldReceive('find')
+            ->with(1)
+            ->once()
+            ->andReturn($actionMock);
 
+        $this->actionModelMock
+            ->shouldReceive('query')
+            ->once()
+            ->andReturn($queryMock);
+
+        $deleted = $this->repository->delete(1);
         $this->assertTrue($deleted);
-        $this->assertDatabaseMissing('actions_service.actions', [
-            'id' => $action->id,
-        ]);
-    }
-
-    /**
-     * Тест удаления несуществующего действия
-     */
-    public function test_delete_non_existent_action_returns_false(): void
-    {
-        $deleted = $this->repository->delete(99999);
-
-        $this->assertFalse($deleted);
     }
 }

@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Collection;
 
 class RecommendationRepository
 {
+    public function __construct(
+        private readonly Recommendation $model = new Recommendation()
+    ) {}
+
     /**
      * Получить все рекомендации
      */
     public function getAll(): Collection
     {
-        return Recommendation::latest()->get();
+        return $this->model->query()->latest()->get();
     }
 
     /**
@@ -20,7 +24,7 @@ class RecommendationRepository
      */
     public function findById(int $id): ?Recommendation
     {
-        return Recommendation::find($id);
+        return $this->model->query()->find($id);
     }
 
     /**
@@ -28,7 +32,8 @@ class RecommendationRepository
      */
     public function getByUser(int $userId, int $limit = 20): Collection
     {
-        return Recommendation::byUser($userId)
+        return $this->model->query()
+            ->where('user_id', $userId)
             ->latest()
             ->limit($limit)
             ->get();
@@ -39,8 +44,9 @@ class RecommendationRepository
      */
     public function getRecentByUser(int $userId, int $days = 7): Collection
     {
-        return Recommendation::byUser($userId)
-            ->recent($days)
+        return $this->model->query()
+            ->where('user_id', $userId)
+            ->where('created_at', '>=', now()->subDays($days))
             ->latest()
             ->get();
     }
@@ -50,8 +56,9 @@ class RecommendationRepository
      */
     public function getByActionType(int $userId, string $actionType, int $limit = 10): Collection
     {
-        return Recommendation::byUser($userId)
-            ->byActionType($actionType)
+        return $this->model->query()
+            ->where('user_id', $userId)
+            ->where('action_type', $actionType)
             ->latest()
             ->limit($limit)
             ->get();
@@ -62,7 +69,7 @@ class RecommendationRepository
      */
     public function create(array $data): Recommendation
     {
-        return Recommendation::create($data);
+        return $this->model->query()->create($data);
     }
 
     /**
@@ -70,7 +77,7 @@ class RecommendationRepository
      */
     public function delete(int $id): bool
     {
-        $recommendation = Recommendation::find($id);
+        $recommendation = $this->model->query()->find($id);
         return $recommendation ? $recommendation->delete() : false;
     }
 
@@ -79,7 +86,8 @@ class RecommendationRepository
      */
     public function deleteOldForUser(int $userId, int $keepDays = 30): int
     {
-        return Recommendation::byUser($userId)
+        return $this->model->query()
+            ->where('user_id', $userId)
             ->where('created_at', '<', now()->subDays($keepDays))
             ->delete();
     }

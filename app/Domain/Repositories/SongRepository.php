@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Collection;
 
 class SongRepository
 {
+    public function __construct(
+        private readonly Song $model = new Song()
+    ) {}
+
     /**
      * Получить все песни
      */
     public function getAll(): Collection
     {
-        return Song::all();
+        return $this->model->query()->get();
     }
 
     /**
@@ -20,7 +24,7 @@ class SongRepository
      */
     public function findById(int $id): ?Song
     {
-        return Song::find($id);
+        return $this->model->query()->find($id);
     }
 
     /**
@@ -28,7 +32,7 @@ class SongRepository
      */
     public function findByExternalId(string $externalId): ?Song
     {
-        return Song::where('external_id', $externalId)->first();
+        return $this->model->query()->where('external_id', $externalId)->first();
     }
 
     /**
@@ -36,7 +40,7 @@ class SongRepository
      */
     public function getByMood(string $mood): Collection
     {
-        return Song::whereJsonContains('mood', $mood)->get();
+        return $this->model->query()->whereJsonContains('mood', $mood)->get();
     }
 
     /**
@@ -44,7 +48,7 @@ class SongRepository
      */
     public function getByMoods(array $moods): Collection
     {
-        $query = Song::query();
+        $query = $this->model->query();
 
         foreach ($moods as $mood) {
             $query->whereJsonContains('mood', $mood);
@@ -58,7 +62,7 @@ class SongRepository
      */
     public function getByArtist(string $artist): Collection
     {
-        return Song::where('artist', 'ILIKE', '%' . $artist . '%')->get();
+        return $this->model->query()->where('artist', 'ILIKE', '%' . $artist . '%')->get();
     }
 
     /**
@@ -66,7 +70,7 @@ class SongRepository
      */
     public function getByGenre(string $genre): Collection
     {
-        return Song::whereJsonContains('mood', $genre)->get();
+        return $this->model->query()->whereJsonContains('mood', $genre)->get();
     }
 
     /**
@@ -74,7 +78,7 @@ class SongRepository
      */
     public function create(array $data): Song
     {
-        return Song::create($data);
+        return $this->model->query()->create($data);
     }
 
     /**
@@ -82,7 +86,7 @@ class SongRepository
      */
     public function update(int $id, array $data): bool
     {
-        $song = Song::find($id);
+        $song = $this->model->query()->find($id);
 
         if (!$song) {
             return false;
@@ -96,7 +100,7 @@ class SongRepository
      */
     public function delete(int $id): bool
     {
-        $song = Song::find($id);
+        $song = $this->model->query()->find($id);
 
         if (!$song) {
             return false;
@@ -110,7 +114,7 @@ class SongRepository
      */
     public function paginate(int $perPage = 20): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
-        return Song::paginate($perPage);
+        return $this->model->query()->paginate($perPage);
     }
 
     /**
@@ -118,7 +122,7 @@ class SongRepository
      */
     public function count(): int
     {
-        return Song::count();
+        return $this->model->query()->count();
     }
 
     /**
@@ -126,7 +130,7 @@ class SongRepository
      */
     public function getAllMoods(): array
     {
-        $songs = Song::all();
+        $songs = $this->model->query()->get();
         $moods = [];
 
         foreach ($songs as $song) {

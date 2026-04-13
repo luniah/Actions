@@ -4,6 +4,7 @@ namespace App\Domain\EloquentModels;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Database\Factories\RecommendationFactory;
 
 class Recommendation extends Model
 {
@@ -48,5 +49,13 @@ class Recommendation extends Model
     public function scopeRecent($query, int $days = 7)
     {
         return $query->where('created_at', '>=', now()->subDays($days));
+    }
+
+    /**
+     * Создать новый экземпляр фабрики для модели
+     */
+    protected static function newFactory()
+    {
+        return RecommendationFactory::new();
     }
 }
