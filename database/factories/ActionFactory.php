@@ -42,7 +42,7 @@ class ActionFactory extends Factory
     }
 
     /**
-     * Состояние для конкретного типа действия
+     * Состояние для прогулки
      */
     public function walk(): static
     {
@@ -53,6 +53,9 @@ class ActionFactory extends Factory
         ]);
     }
 
+    /**
+     * Состояние для сна
+     */
     public function sleep(): static
     {
         return $this->state(fn(array $attributes) => [
@@ -62,6 +65,9 @@ class ActionFactory extends Factory
         ]);
     }
 
+    /**
+     * Состояние для просмотра фильма
+     */
     public function watchMovie(): static
     {
         return $this->state(fn(array $attributes) => [
@@ -71,6 +77,9 @@ class ActionFactory extends Factory
         ]);
     }
 
+    /**
+     * Состояние для прослушивания музыки
+     */
     public function listenMusic(): static
     {
         return $this->state(fn(array $attributes) => [
@@ -80,6 +89,9 @@ class ActionFactory extends Factory
         ]);
     }
 
+    /**
+     * Состояние для посещения места
+     */
     public function visitPlace(): static
     {
         return $this->state(fn(array $attributes) => [

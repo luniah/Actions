@@ -5,21 +5,20 @@ namespace Tests\Unit\Application\Services;
 use App\Application\Models\WorldContextModel;
 use App\Application\Services\RecommendationService;
 use App\Application\Services\WorldContextAnalyzer;
-use App\Application\Services\WorldServiceClient;
 use App\Domain\Repositories\ActionRepository;
 use App\Domain\Repositories\RecommendationRepository;
-use App\Domain\Repositories\SongRepository;
-use App\Domain\Repositories\MovieRepository;
 use App\Domain\EloquentModels\Action;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\EloquentModels\Recommendation;
+use Illuminate\Database\Eloquent\Collection;
+use Mockery;
 use Tests\TestCase;
 
 class RecommendationServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
     private RecommendationService $service;
-    private ActionRepository $actionRepository;
+    private $recommendationRepositoryMock;
+    private $actionRepositoryMock;
+    private $contextAnalyzerMock;
 
     protected function setUp(): void
     {
@@ -36,74 +35,73 @@ class RecommendationServiceTest extends TestCase
         file_put_contents($musicPath, json_encode(['tracks' => []]));
         file_put_contents($moviesPath, json_encode(['movies' => []]));
 
-        $this->actionRepository = new ActionRepository();
-        $contextAnalyzer = new WorldContextAnalyzer();
-        $recommendationRepository = new RecommendationRepository();
-        $songRepository = new SongRepository();
-        $movieRepository = new MovieRepository();
+        $this->recommendationRepositoryMock = Mockery::mock(RecommendationRepository::class);
+        $this->actionRepositoryMock = Mockery::mock(ActionRepository::class);
+        $this->contextAnalyzerMock = Mockery::mock(WorldContextAnalyzer::class);
 
         $this->service = new RecommendationService(
-            $recommendationRepository,
-            $this->actionRepository,
-            $contextAnalyzer
+            $this->recommendationRepositoryMock,
+            $this->actionRepositoryMock,
+            $this->contextAnalyzerMock
         );
-
-        // Создаём действия в БД
-        $this->seedActions();
     }
 
-    /**
-     * Создать тестовые действия
-     */
-    private function seedActions(): void
+    protected function tearDown(): void
     {
-        Action::create([
-            'type' => 'walk',
-            'name' => 'Прогулка',
-            'description' => 'Прогулка на свежем воздухе',
-            'metadata' => ['icon' => '🚶'],
-        ]);
-
-        Action::create([
-            'type' => 'sleep',
-            'name' => 'Сон',
-            'description' => 'Полноценный отдых',
-            'metadata' => ['icon' => '😴'],
-        ]);
-
-        Action::create([
-            'type' => 'watch_movie',
-            'name' => 'Просмотр фильма',
-            'description' => 'Просмотр фильма',
-            'metadata' => ['icon' => '🎬'],
-        ]);
-
-        Action::create([
-            'type' => 'listen_music',
-            'name' => 'Прослушивание музыки',
-            'description' => 'Прослушивание музыки',
-            'metadata' => ['icon' => '🎵'],
-        ]);
-
-        Action::create([
-            'type' => 'visit_place',
-            'name' => 'Посещение места',
-            'description' => 'Посещение места',
-            'metadata' => ['icon' => '📍'],
-        ]);
+        Mockery::close();
+        parent::tearDown();
     }
 
     /**
      * Тест выбора типа действия для утра с хорошей погодой
      */
-    public function test_recommend_morning_good_weather(): void
+    public function test_recommend_morning_good_weather_returns_outdoor_activity(): void
     {
         $context = $this->createContext('MORNING', 'SUMMER', 'CLEAR', 22);
 
-        $recommendation = $this->service->recommend($context);
+        $this->contextAnalyzerMock
+            ->shouldReceive('isGoodForIndoorActivity')
+            ->with($context)
+            ->andReturn(false);
 
-        $this->assertEquals('123', $recommendation->userId);
-        $this->assertContains($recommendation->actionType, ['walk', 'visit_place']);
+        $this->contextAnalyzerMock
+            ->shouldReceive('hasNearbyPlaces')
+            ->with($context)
+            ->andReturn(true);
+
+        $this->contextAnalyzerMock
+            ->shouldReceive('getContextAnalysis')
+            ->with($context)
+            ->andReturn(['season' => 'SUMMER']);
+
+        $this->contextAnalyzerMock
+            ->shouldReceive('getNearbyPlaces')
+            ->with($context, 3)
+            ->andReturn([]);
+
+        $action = Action::factory()->visitPlace()->make(['id' => 5]);
+
+        $this->actionRepositoryMock
+            ->shouldReceive('getByType')
+            ->with('visit_place')
+            ->andReturn(new Collection([$action]));
+
+        $recommendation = Recommendation::factory()->make([
+            'id' => 1,
+            'user_id' => 123,
+            'action_type' => 'visit_place',
+            'action_id' => 5,
+            'created_at' => now(),
+        ]);
+
+        $this->recommendationRepositoryMock
+            ->shouldReceive('create')
+            ->andReturn($recommendation);
+
+        $result = $this->service->recommend($context);
+
+        $this->assertEquals('123', $result->userId);
+        $this->assertEquals('visit_place', $result->actionType);
     }
 
     /**
@@ -113,21 +111,94 @@ class RecommendationServiceTest extends TestCase
     {
         $context = $this->createContext('NIGHT', 'WINTER', 'CLEAR', -5);
 
-        $recommendation = $this->service->recommend($context);
+        $this->contextAnalyzerMock
+            ->shouldReceive('isGoodForIndoorActivity')
+            ->with($context)
+            ->andReturn(true);
 
-        $this->assertEquals('sleep', $recommendation->actionType);
+        $this->contextAnalyzerMock
+            ->shouldReceive('getContextAnalysis')
+            ->with($context)
+            ->andReturn(['season' => 'WINTER']);
+
+        $this->contextAnalyzerMock
+            ->shouldReceive('isHot')
+            ->with($context)
+            ->andReturn(false);
+
+        $this->contextAnalyzerMock
+            ->shouldReceive('isCold')
+            ->with($context)
+            ->andReturn(true);
+
+        $action = Action::factory()->sleep()->make(['id' => 2]);
+
+        $this->actionRepositoryMock
+            ->shouldReceive('getByType')
+            ->with('sleep')
+            ->andReturn(new Collection([$action]));
+
+        $recommendation = Recommendation::factory()->make([
+            'id' => 2,
+            'user_id' => 123,
+            'action_type' => 'sleep',
+            'action_id' => 2,
+            'created_at' => now(),
+        ]);
+
+        $this->recommendationRepositoryMock
+            ->shouldReceive('create')
+            ->andReturn($recommendation);
+
+        $result = $this->service->recommend($context);
+
+        $this->assertEquals('sleep', $result->actionType);
     }
 
     /**
      * Тест выбора типа действия для дождливой погоды
      */
-    public function test_recommend_rainy_weather_returns_indoor_activity(): void
+    public function test_recommend_rainy_weather_returns_movie(): void
     {
         $context = $this->createContext('AFTERNOON', 'AUTUMN', 'RAINY', 10);
 
-        $recommendation = $this->service->recommend($context);
+        $this->contextAnalyzerMock
+            ->shouldReceive('isGoodForIndoorActivity')
+            ->with($context)
+            ->andReturn(true);
 
-        $this->assertEquals('watch_movie', $recommendation->actionType);
+        $this->contextAnalyzerMock
+            ->shouldReceive('getContextAnalysis')
+            ->with($context)
+            ->andReturn(['season' => 'AUTUMN']);
+
+        $this->contextAnalyzerMock
+            ->shouldReceive('getRecommendedMovieGenre')
+            ->with($context)
+            ->andReturn('драма');
+
+        $action = Action::factory()->watchMovie()->make(['id' => 3]);
+
+        $this->actionRepositoryMock
+            ->shouldReceive('getByType')
+            ->with('watch_movie')
+            ->andReturn(new Collection([$action]));
+
+        $recommendation = Recommendation::factory()->make([
+            'id' => 3,
+            'user_id' => 123,
+            'action_type' => 'watch_movie',
+            'action_id' => 3,
+            'created_at' => now(),
+        ]);
+
+        $this->recommendationRepositoryMock
+            ->shouldReceive('create')
+            ->andReturn($recommendation);
+
+        $result = $this->service->recommend($context);
+
+        $this->assertEquals('watch_movie', $result->actionType);
     }
 
     /**
@@ -135,13 +206,16 @@ class RecommendationServiceTest extends TestCase
      */
     public function test_get_user_history(): void
     {
-        $context = $this->createContext('EVENING', 'SPRING', 'CLEAR', 20);
+        $recommendations = Recommendation::factory()->forUser(123)->count(3)->make(['id' => 1]);
+        $collection = new Collection($recommendations);
 
-        $this->service->recommend($context);
-        $this->service->recommend($context);
-        $this->service->recommend($context);
+        $this->recommendationRepositoryMock
+            ->shouldReceive('getByUser')
+            ->with(123, 20)
+            ->once()
+            ->andReturn($collection);
 
-        $history = $this->service->getUserHistory(123, 10);
+        $history = $this->service->getUserHistory(123);
 
         $this->assertCount(3, $history);
         $this->assertEquals(123, $history[0]['user_id']);

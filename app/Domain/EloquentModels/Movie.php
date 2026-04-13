@@ -4,6 +4,7 @@ namespace App\Domain\EloquentModels;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Database\Factories\MovieFactory;
 
 class Movie extends Model
 {
@@ -63,5 +64,13 @@ class Movie extends Model
     public function scopeByDirector($query, string $director)
     {
         return $query->where('director', $director);
+    }
+
+    /**
+     * Создать новый экземпляр фабрики для модели
+     */
+    protected static function newFactory()
+    {
+        return MovieFactory::new();
     }
 }

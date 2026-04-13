@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Collection;
 
 class ActionRepository
 {
+    public function __construct(
+        private readonly Action $model = new Action()
+    ) {}
+
     /**
      * Получить все действия
      */
     public function getAll(): Collection
     {
-        return Action::all();
+        return $this->model->query()->get();
     }
 
     /**
@@ -20,7 +24,7 @@ class ActionRepository
      */
     public function findById(int $id): ?Action
     {
-        return Action::find($id);
+        return $this->model->query()->find($id);
     }
 
     /**
@@ -28,7 +32,7 @@ class ActionRepository
      */
     public function getByType(string $type): Collection
     {
-        return Action::byType($type)->get();
+        return $this->model->query()->where('type', $type)->get();
     }
 
     /**
@@ -36,7 +40,7 @@ class ActionRepository
      */
     public function create(array $data): Action
     {
-        return Action::create($data);
+        return $this->model->query()->create($data);
     }
 
     /**
@@ -44,7 +48,7 @@ class ActionRepository
      */
     public function update(int $id, array $data): bool
     {
-        $action = Action::find($id);
+        $action = $this->model->query()->find($id);
 
         if (!$action) {
             return false;
@@ -58,7 +62,7 @@ class ActionRepository
      */
     public function delete(int $id): bool
     {
-        $action = Action::find($id);
+        $action = $this->model->query()->find($id);
 
         if (!$action) {
             return false;

@@ -4,6 +4,7 @@ namespace App\Domain\EloquentModels;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Database\Factories\ActionFactory;
 
 class Action extends Model
 {
@@ -19,7 +20,6 @@ class Action extends Model
         'metadata' => 'array',
     ];
 
-    // Типы действий
     public const TYPE_WALK = 'walk';
     public const TYPE_SLEEP = 'sleep';
     public const TYPE_WATCH_MOVIE = 'watch_movie';
@@ -32,5 +32,13 @@ class Action extends Model
     public function scopeByType($query, string $type)
     {
         return $query->where('type', $type);
+    }
+
+    /**
+     * Создать новый экземпляр фабрики для модели
+     */
+    protected static function newFactory()
+    {
+        return ActionFactory::new();
     }
 }

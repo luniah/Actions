@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Collection;
 
 class MovieRepository
 {
+    public function __construct(
+        private readonly Movie $model = new Movie()
+    ) {}
+
     /**
      * Получить все фильмы
      */
     public function getAll(): Collection
     {
-        return Movie::all();
+        return $this->model->query()->get();
     }
 
     /**
@@ -20,7 +24,7 @@ class MovieRepository
      */
     public function findById(int $id): ?Movie
     {
-        return Movie::find($id);
+        return $this->model->query()->find($id);
     }
 
     /**
@@ -28,7 +32,7 @@ class MovieRepository
      */
     public function findByExternalId(string $externalId): ?Movie
     {
-        return Movie::where('external_id', $externalId)->first();
+        return $this->model->query()->where('external_id', $externalId)->first();
     }
 
     /**
@@ -36,7 +40,7 @@ class MovieRepository
      */
     public function getByGenre(string $genre): Collection
     {
-        return Movie::byGenre($genre)->get();
+        return $this->model->query()->whereJsonContains('genres', $genre)->get();
     }
 
     /**
@@ -44,7 +48,13 @@ class MovieRepository
      */
     public function getByGenres(array $genres): Collection
     {
-        return Movie::byGenres($genres)->get();
+        $query = $this->model->query();
+
+        foreach ($genres as $genre) {
+            $query->whereJsonContains('genres', $genre);
+        }
+
+        return $query->get();
     }
 
     /**
@@ -52,7 +62,7 @@ class MovieRepository
      */
     public function getByReleaseYear(int $year): Collection
     {
-        return Movie::byReleaseYear($year)->get();
+        return $this->model->query()->where('release_year', $year)->get();
     }
 
     /**
@@ -60,7 +70,7 @@ class MovieRepository
      */
     public function getByDirector(string $director): Collection
     {
-        return Movie::byDirector($director)->get();
+        return $this->model->query()->where('director', $director)->get();
     }
 
     /**
@@ -68,7 +78,7 @@ class MovieRepository
      */
     public function create(array $data): Movie
     {
-        return Movie::create($data);
+        return $this->model->query()->create($data);
     }
 
     /**
@@ -76,7 +86,7 @@ class MovieRepository
      */
     public function update(int $id, array $data): bool
     {
-        $movie = Movie::find($id);
+        $movie = $this->model->query()->find($id);
 
         if (!$movie) {
             return false;
@@ -90,7 +100,7 @@ class MovieRepository
      */
     public function delete(int $id): bool
     {
-        $movie = Movie::find($id);
+        $movie = $this->model->query()->find($id);
 
         if (!$movie) {
             return false;
