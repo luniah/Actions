@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: actions_postgres
+    environment:
+      POSTGRES_DB: actions_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: actions_app
+    ports:
+      - "8081:80"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: actions_app
+      DB_USERNAME: postgres
+      DB_PASSWORD: pass
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: base64:EGAAJ1PfHAonni2BFwduz5BFlNfeocFRAg9BiKr2hGs=
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+        php artisan migrate --force &&
+        php artisan db:seed --force &&
+        apache2-foreground
+      "
+
+volumes:
+  postgres_data:
