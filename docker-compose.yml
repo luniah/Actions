@@ -1,7 +1,88 @@
 services:
-  postgres:
-    image: postgres:18
+  # ============ KAFKA ============
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - MirrorBox
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    ports:
+      - "9092:9092"
+    networks:
+      - MirrorBox
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - MirrorBox
+
+  # ============ ACTIONS SERVICE ============
+  actions_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: actions_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    networks:
+      - MirrorBox
+    depends_on:
+      - actions_db
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - DB_HOST=actions_db
+
+  actions_http_server:
+    image: nginx:alpine
+    container_name: actions_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - MirrorBox
+    depends_on:
+      - actions_app
+
+  actions_db:
+    image: postgres:15-alpine
     container_name: actions_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: actions_app
       POSTGRES_USER: postgres
@@ -9,40 +90,33 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - postgres_data_actions:/var/lib/postgresql/data
+    networks:
+      - MirrorBox
 
-  app:
+  actions_consumer:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: actions_app
-    ports:
-      - "8081:80"
+    container_name: actions_consumer
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: tail -f /dev/null  # Временно, пока нет команды kafka:consume, а так php artisan kafka:consume
     environment:
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: actions_app
-      DB_USERNAME: postgres
-      DB_PASSWORD: pass
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_KEY: base64:EGAAJ1PfHAonni2BFwduz5BFlNfeocFRAg9BiKr2hGs=
+      - KAFKA_BROKERS=kafka:9092
+      - CONSUMER_TYPE=actions
+    networks:
+      - MirrorBox
     depends_on:
-      postgres:
-        condition: service_healthy
-    command: >
-      sh -c "
-        php artisan migrate --force &&
-        php artisan db:seed --force &&
-        apache2-foreground
-      "
+      - kafka
+      - actions_app
+
+networks:
+  MirrorBox:
+    driver: bridge
 
 volumes:
-  postgres_data:
+  postgres_data_actions:
+    driver: local
