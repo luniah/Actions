@@ -12,26 +12,19 @@ services:
       - MirrorBox
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:6.2.1
     container_name: kafka
-    depends_on:
-      - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_NODE_ID: 1
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     ports:
       - "9092:9092"
+    depends_on:
+      - zookeeper
     networks:
       - MirrorBox
 
@@ -53,9 +46,9 @@ services:
       dockerfile: Dockerfile
     container_name: actions_app
     restart: unless-stopped
-    working_dir: /var/www
+    working_dir: /var/www/html
     volumes:
-      - .:/var/www
+      - .:/var/www/html
     networks:
       - MirrorBox
     depends_on:
@@ -72,7 +65,7 @@ services:
     ports:
       - "8000:80"
     volumes:
-      - .:/var/www
+      - .:/var/www/html
       - ./nginx/conf.d:/etc/nginx/conf.d
     networks:
       - MirrorBox
@@ -99,19 +92,29 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: actions_consumer
-    restart: unless-stopped
-    working_dir: /var/www
+    restart: on-failure
+    working_dir: /var/www/html
     volumes:
-      - .:/var/www
-    command: tail -f /dev/null  # Временно, пока нет команды kafka:consume, а так php artisan kafka:consume
+      - .:/var/www/html
+    command: php artisan kafka:consume
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - CONSUMER_TYPE=actions
+      - KAFKA_TOPIC_REQUEST=client_to_actions
+      - KAFKA_TOPIC_RESPONSE=actions_to_client
+      - DB_HOST=actions_db
+      - DB_PORT=5432
+      - DB_DATABASE=actions_app
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=pass
     networks:
       - MirrorBox
     depends_on:
-      - kafka
-      - actions_app
+      kafka:
+        condition: service_started
+      actions_app:
+        condition: service_started
+      actions_db:
+        condition: service_started
 
 networks:
   MirrorBox:
