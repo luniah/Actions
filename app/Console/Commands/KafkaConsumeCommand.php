@@ -10,13 +10,6 @@ use App\Application\Services\RecommendationService;
 use App\Application\Services\WorldServiceClient;
 use Illuminate\Support\Facades\Log;
 
-// Определяем константы, если они не определены
-if (!defined('RD_KAFKA_OFFSET_STORED')) define('RD_KAFKA_OFFSET_STORED', 0);
-if (!defined('RD_KAFKA_RESP_ERR_NO_ERROR')) define('RD_KAFKA_RESP_ERR_NO_ERROR', 0);
-if (!defined('RD_KAFKA_RESP_ERR__PARTITION_EOF')) define('RD_KAFKA_RESP_ERR__PARTITION_EOF', -191);
-if (!defined('RD_KAFKA_RESP_ERR__TIMED_OUT')) define('RD_KAFKA_RESP_ERR__TIMED_OUT', -185);
-if (!defined('RD_KAFKA_PARTITION_UA')) define('RD_KAFKA_PARTITION_UA', -1);
-
 class KafkaConsumeCommand extends Command
 {
     protected $signature = 'kafka:consume';

@@ -13,7 +13,7 @@ use OpenApi\Attributes as OA;
     )
 )]
 #[OA\Server(
-    url: "http://127.0.0.1:8000"
+    url: "http://localhost:8002"
 )]
 abstract class Controller
 {

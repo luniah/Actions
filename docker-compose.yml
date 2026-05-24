@@ -92,7 +92,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: actions_consumer
-    restart: on-failure
+    restart: unless-stopped
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
@@ -109,12 +109,9 @@ services:
     networks:
       - MirrorBox
     depends_on:
-      kafka:
-        condition: service_started
-      actions_app:
-        condition: service_started
-      actions_db:
-        condition: service_started
+      - kafka
+      - actions_app
+      - actions_db
 
 networks:
   MirrorBox:
